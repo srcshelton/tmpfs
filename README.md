@@ -14,6 +14,6 @@ Flash.
 https://github.com/srcshelton/gentoo-ebuilds also contains an ebuild-version of
 this script, for easy installation on Gentoo Linux.
 
-tmpfs has been extensively tested on a PC Engines Alix system and several
-Raspberry Pis.
+tmpfs has been extensively tested on a PC Engines Alix system, Ubiquiti EdgeMAX
+routers and several Raspberry Pis.
 

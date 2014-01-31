@@ -1,5 +1,5 @@
 #!/sbin/runscript
-# Copyright 2010-2013 Stuart Shelton
+# Copyright 2010-2014 Stuart Shelton
 # Distributed under the terms of the GNU General Public License v2
 
 source /etc/conf.d/tmpfs
@@ -8,6 +8,7 @@ extra_commands="forceunmount forceumount commit"
 
 OVERLAY_ROOT=""
 mp=""
+fs="none|tmpfs"
 
 function getconf() {
 	local svc="$1" ; shift
@@ -22,6 +23,11 @@ function getconf() {
 		x="${svc}_PATH"
 		if [[ -n "${!x}" ]]; then
 			mp="${!x}"
+		fi
+		x="${svc}_TYPE"
+		if [[ -n "${!x}" ]]; then
+			TYPE="${!x}"
+			[[ -n "${TYPE}" ]] && fs="${fs}|${TYPE}"
 		fi
 	fi
 
@@ -114,7 +120,7 @@ function unbindtmpfs() {
 	umount -f "/${mp}" >/dev/null 2>&1
 	(( DEBUG )) && einfo "DEBUG: New mounts" && mount
 
-	if ! mount | grep -Eq " on /${mp} type (none|tmpfs) "; then
+	if ! mount | grep -Eq " on /${mp} type (${fs}) "; then
 		code=0
 	else
 		if ! [[ -x "$( type -pf lsof )" ]]; then
@@ -148,7 +154,7 @@ function unbindtmpfs() {
 
 			umount -f "/${mp}" >/dev/null 2>&1
 
-			if mount | grep -Eq " on /${mp} type (none|tmpfs) "; then
+			if mount | grep -Eq " on /${mp} type (${fs}) "; then
 				code=1
 			else
 				code=0
@@ -236,7 +242,7 @@ start() {
 		return 1
 		;;
 	*)
-		local exclude="" fstab="" fs="" fsmp="" fstype="" fsopt="" code=1
+		local exclude="" fstab="" fsd="" fsmp="" fstype="" fsopt="" code=1
 
 		local x="${SVCNAME#*.}_EXCLUDE"
 		if [[ -n "${!x}" ]]; then
@@ -245,20 +251,20 @@ start() {
 		x="${SVCNAME#*.}_FSTAB"
 		if [[ -n "${!x}" ]]; then
 			fstab="${!x}"
-			if [[ -n "$fstab" ]]; then
-				fs="$( cut -d' ' -f 1 <<<"$fstab" )"
-				fsmp="$( cut -d' ' -f 2 <<<"$fstab" )"
-				fstype="$( cut -d' ' -f 3 <<<"$fstab" )"
-				fsopt="$( cut -d' ' -f 4 <<<"$fstab" )"
-				if [[ -n "$fs" && -n "$fsmp" && -n "$fstype" ]]; then
-					if ! mount | grep -q "^$fs on $fsmp type $fstype "; then
-						ebegin "Mounting '$fs' on $fsmp"
-						if [[ -n "$fsopt" ]]; then
-							mount -t "$fstype" "$fs" "$fsmp" -o "$fsopt"
+			if [[ -n "${fstab}" ]]; then
+				fsd="$( cut -d' ' -f 1 <<<"${fstab}" )"
+				fsmp="$( cut -d' ' -f 2 <<<"${fstab}" )"
+				fstype="$( cut -d' ' -f 3 <<<"${fstab}" )"
+				fsopt="$( cut -d' ' -f 4 <<<"${fstab}" )"
+				if [[ -n "${fsd}" && -n "${fsmp}" && -n "${fstype}" ]]; then
+					if ! mount | grep -q "^${fsd} on ${fsmp} type ${fstype} "; then
+						ebegin "Mounting '${fsd}' on ${fsmp}"
+						if [[ -n "${fsopt}" ]]; then
+							mount -t "${fstype}" "${fsd}" "${fsmp}" -o "${fsopt}"
 						else
-							mount -t "$fstype" "$fs" "$fsmp"
+							mount -t "${fstype}" "${fsd}" "${fsmp}"
 						fi
-						eend $?
+						eend ${?}
 					fi
 				fi
 			fi
@@ -267,7 +273,7 @@ start() {
 
 		getconf "${SVCNAME#*.}" || return $?
 
-		if mount | grep -Eq " on /${mp} type (none|tmpfs) "; then
+		if mount | grep -Eq " on /${mp} type (${fs}) "; then
 			eerror "\"/${mp}\" is already mounted! "
 			return 1
 		fi
@@ -371,7 +377,7 @@ stop() {
 
 		getconf "${SVCNAME#*.}" || return $?
 
-		if ! mount | grep -Eq " on /${mp} type (none|tmpfs) "; then
+		if ! mount | grep -Eq " on /${mp} type (${fs}) "; then
 			eerror "\"/${mp}\" is not mounted from tmpfs! "
 			return 1
 		fi
@@ -414,7 +420,9 @@ stop() {
 					echo -ne "\a"
 					sleep 1
 				done
-				echo "sub" > /proc/sysrq-trigger
+				echo "s" > /proc/sysrq-trigger
+				echo "u" > /proc/sysrq-trigger
+				echo "b" > /proc/sysrq-trigger
 			fi
 		fi
 
@@ -447,7 +455,7 @@ forceumount() {
 		ebegin "Unconditionally restoring working-set from \"$OVERLAY_ROOT\" back to \"/$mp\""
 		eindent
 
-		if ! mount | grep -Eq " on /${mp} type (none|tmpfs) "; then
+		if ! mount | grep -Eq " on /${mp} type (${fs}) "; then
 			einfo "\"/${mp}\" is not currently mounted from tmpfs! "
 			code=0
 		else
@@ -488,7 +496,7 @@ commit() {
 
 		getconf "${SVCNAME#*.}" || return $?
 
-		if ! mount | grep -Eq " on /${mp} type (none|tmpfs) "; then
+		if ! mount | grep -Eq " on /${mp} type (${fs}) "; then
 			eerror "\"/${mp}\" is not mounted from tmpfs! "
 			return 1
 		fi
